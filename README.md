@@ -4,6 +4,7 @@ The script AD enumeration.ps1 is designed for Active Directory (AD) enumeration 
 
 LDAPSearchFunction.ps1
 
-The LDAPSearch function in the PowerShell script is designed for Active Directory enumeration. It queries AD objects based on a given LDAP query string. The script retrieves the domain's Primary Domain Controller and constructs an LDAP path to search AD objects. Usage examples demonstrate how to call LDAPSearch with specific queries for groups or user objects. 
+The LDAPSearch function in the PowerShell script is designed for Active Directory enumeration. It queries AD objects based on a given LDAP query string. The script retrieves the domain's Primary Domain Controller and constructs an LDAP path to search AD objects. Usage examples demonstrate how to call LDAPSearch with specific queries for groups or user objects.
 
-## when running in powershell you must first enter the command "powershell -ep bypass" to allow powershell to run scripts. 
+
+
