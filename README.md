@@ -105,12 +105,15 @@ $env:QB_WOO__SYNC__DELTA_MINUTES_LOOKBACK = "60"
 $env:QB_WOO__SYNC__ORDER_LOOKBACK_MINUTES = "120"
 
 $env:QB_WOO__TAX__DEFAULT_TAX_CODE = "NON"
-$env:QB_WOO__TAX__GST_TAX_CODE = "GST"
-$env:QB_WOO__TAX__HST_TAX_CODE = "HST"
-$env:QB_WOO__TAX__PST_TAX_CODE = "PST"
+$env:QB_WOO__TAX__DEFAULT_TAX_NAME = "No Tax"
+$env:QB_WOO__TAX__DEFAULT_TAX_RATE_PERCENT = "0"
+$env:QB_WOO__TAX__TAX_RULES = '[{"country":"CA","state":"ON","tax_code":"HST","tax_name":"HST","rate_percent":13.0},{"country":"CA","state":"*","tax_code":"GST","tax_name":"GST","rate_percent":5.0}]'
 
-$env:QB_WOO__CURRENCY_ACCOUNTS__CAD_DEPOSIT_ACCOUNT = "Undeposited Funds CAD"
-$env:QB_WOO__CURRENCY_ACCOUNTS__USD_DEPOSIT_ACCOUNT = "Undeposited Funds USD"
+$env:QB_WOO__CURRENCY_ACCOUNTS__DEFAULT_DEPOSIT_ACCOUNT = "Undeposited Funds CAD"
+$env:QB_WOO__CURRENCY_ACCOUNTS__ROUTES = '[{"currency":"CAD","deposit_account":"Undeposited Funds CAD"},{"currency":"USD","deposit_account":"Undeposited Funds USD"}]'
+
+$env:QB_WOO__HOST_SETUP__AUTO_CONFIGURE_WINDOWS_FIREWALL = "false"
+$env:QB_WOO__HOST_SETUP__FIREWALL_RULE_NAME = "QuickBooksProject Outbound 443"
 ```
 
 Then run:
@@ -336,3 +339,191 @@ Example route JSON:
 ```
 
 Available Woo fields are shown directly in the Settings tab UI and validated before save/apply.
+
+---
+
+## 17) Exactly what to configure in QuickBooks Desktop
+
+Before running the app live, do this in QuickBooks Desktop Enterprise:
+
+1. **Company file & user access**
+   - Open the target company file on the same Windows machine where this app will run.
+   - Use a QuickBooks user with permissions to:
+     - read inventory items,
+     - create Sales Receipts,
+     - access the chart of accounts and tax items.
+
+2. **SDK authorization**
+   - On first app connection, QuickBooks should show an SDK authorization prompt.
+   - Approve access for this app and allow it to sign in automatically when safe for your environment.
+
+3. **Inventory item setup**
+   - Ensure inventory items are enabled and quantities are tracked.
+   - Ensure each item has a stable SKU or identifier that maps to Woo SKU.
+   - If using `ManufacturerPartNumber` for SKU mapping, verify it is populated consistently.
+
+4. **Tax items/codes**
+   - Create/verify the tax codes used in app settings (e.g., `GST`, `HST`, `PST`, `NON`).
+   - Ensure the exact names in settings match QuickBooks names.
+
+5. **Deposit accounts for currency routing**
+   - Create/verify accounts for CAD/USD routing (or your desired account names).
+   - Ensure account names match exactly what you configure in the app.
+
+6. **Operational behavior**
+   - Keep QuickBooks installed, licensed, and accessible during sync windows.
+   - If QuickBooks is closed/locked, COM requests can fail.
+
+---
+
+## 18) Exactly what to configure in WordPress / WooCommerce
+
+1. **WooCommerce REST API credentials**
+   - Generate Consumer Key + Consumer Secret with read/write permissions.
+   - Use HTTPS store URL.
+
+2. **SKU discipline**
+   - Ensure each product (and variation if used) has correct SKU.
+   - Avoid duplicate SKUs across products/variations.
+
+3. **Stock settings**
+   - Ensure products are configured to manage stock if you want quantity updates reflected.
+
+4. **Order flow readiness**
+   - Sales import logic reads Woo orders (processing/completed) and posts them to QB.
+   - Validate your Woo order statuses and payment lifecycle match this expectation.
+
+5. **Plugins / environment**
+   - Required: WooCommerce itself (REST API is built-in).
+   - No mandatory third-party Woo sync plugin is required for this project.
+   - If security plugins/firewalls are enabled, allow API requests from the app host.
+
+---
+
+## 19) SQLite prerequisites and operational notes
+
+SQLite is bundled with Python (`sqlite3`) and generally requires no separate install.
+
+1. **Filesystem permissions**
+   - The app process account must have read/write access to the folder containing `state.db`.
+
+2. **Backups**
+   - Back up `state.db` regularly (daily recommended for operations).
+   - Also back up logs for diagnostics.
+
+3. **Concurrency**
+   - SQLite is fine for single-host/single-app MVP usage.
+   - For high concurrency or multi-operator writes, migrate state to Postgres in a future version.
+
+4. **Idempotency**
+   - `processed_orders` table prevents duplicate posting of the same order.
+
+---
+
+## 20) Critical oversights checklist before go-live
+
+- [ ] Test with `dry_run=true` first.
+- [ ] Confirm all QuickBooks tax/account names exactly match settings.
+- [ ] Confirm Woo SKU coverage and no duplicates.
+- [ ] Validate one end-to-end order import in a test company file first.
+- [ ] Validate spreadsheet routing output (if enabled) and header/column mapping.
+- [ ] Keep a rollback plan (DB backup + app settings snapshot).
+- [ ] Define who monitors failures and where alerts/logs are reviewed.
+
+---
+
+## 21) Section 12 roadmap follow-up
+
+The roadmap items remain valid and are now prioritized as:
+
+1. Per-store tax rules loaded from config/database (beyond current JSON settings model).
+2. More complete QB item mapping (`ListID` cache + fallback lookup).
+3. Full persistent GUI settings editor (save/load securely without manual env setup).
+4. Unit/integration tests with adapter mocks and sample payloads.
+5. Optional webhook-triggered near-real-time order sync.
+
+---
+
+## 22) Ports, permissions, and communication channels (automatic host prep)
+
+The app now includes a **Prepare Host (Ports/Permissions)** workflow in the GUI.
+
+What it checks/configures:
+
+1. **Filesystem permissions**
+   - Verifies the app can write to the directories used by:
+     - `state.db`
+     - `sync.log`
+
+2. **Network connectivity to Woo stores**
+   - Tests TCP connectivity to each configured Woo store host/port (typically 443 for HTTPS).
+
+3. **Windows firewall rule (optional)**
+   - If enabled in settings (`host_setup.auto_configure_windows_firewall=true`), app attempts to create outbound TCP 443 allow rule.
+   - This may require running with Administrator privileges.
+
+Important notes:
+- This feature does **not** bypass OS security; it reports errors when elevation is required.
+- If firewall rule creation fails, run the app elevated once or create rule manually.
+- If your environment uses proxy/security appliances, coordinate with IT to allow the QuickBooks host to reach your Woo API endpoint(s).
+
+---
+
+## 23) Windows 11 Pro installer build (guided setup launcher)
+
+This repository now includes installer tooling:
+
+- Inno Setup script: `installer/QuickBooksProject.iss`
+- Build script: `scripts/build_windows_installer.ps1`
+
+Build steps on Windows 11 Pro:
+
+1. Install Python 3.11+.
+2. Install Inno Setup 6.
+3. Run PowerShell as Administrator.
+4. Execute:
+
+```powershell
+./scripts/build_windows_installer.ps1
+```
+
+Outputs:
+- App EXE from PyInstaller in `dist/app` (or PyInstaller default dist path).
+- Installer EXE in `dist/installer`.
+
+Installer behavior:
+- Creates Start Menu/Desktop entries.
+- Launches app with `--first-run` so setup opens directly to Settings tab.
+
+---
+
+## 24) GitHub publication notes
+
+To publish publicly:
+
+1. Push this branch to your GitHub repository.
+2. In GitHub repository settings, set visibility to **Public**.
+3. Create a release and attach installer from `dist/installer`.
+
+> This coding environment cannot directly change your GitHub repo visibility settings without your account/token context.
+
+---
+
+## 25) Migrating this codebase to your `quickbooks-connector` GitHub repo
+
+If you already created a GitHub repo named `quickbooks-connector`, migrate this project with:
+
+```bash
+git remote rename origin old-origin || true
+git remote add origin https://github.com/<your-org-or-user>/quickbooks-connector.git
+git push -u origin --all
+git push -u origin --tags
+```
+
+Optional cleanup after successful migration:
+
+```bash
+git remote remove old-origin
+```
+
+Set repository visibility to public in GitHub settings, then create a release and upload the installer artifact from `dist/installer`.

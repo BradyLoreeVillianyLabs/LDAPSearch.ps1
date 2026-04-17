@@ -91,6 +91,12 @@ class SpreadsheetSettings(BaseModel):
     )
 
 
+class HostSetupSettings(BaseModel):
+    auto_configure_windows_firewall: bool = False
+    firewall_rule_name: str = "QuickBooksProject Outbound 443"
+    test_timeout_seconds: int = 5
+
+
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="QB_WOO_", env_nested_delimiter="__")
 
@@ -107,6 +113,7 @@ class AppSettings(BaseSettings):
     tax: TaxSettings = TaxSettings()
     currency_accounts: CurrencyAccountSettings = CurrencyAccountSettings()
     spreadsheet: SpreadsheetSettings = SpreadsheetSettings()
+    host_setup: HostSetupSettings = HostSetupSettings()
 
     def active_stores(self) -> list[WooStoreSettings]:
         stores = [s for s in self.woo_stores if s.enabled]

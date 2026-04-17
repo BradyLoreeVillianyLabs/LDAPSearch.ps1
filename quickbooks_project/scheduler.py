@@ -15,10 +15,18 @@ class SyncScheduler:
     def __init__(self, engine: SyncEngine, interval_minutes: int) -> None:
         self.engine = engine
         self.interval_minutes = interval_minutes
-        self._scheduler = BackgroundScheduler(job_defaults={"max_instances": 1, "coalesce": True})
         self._lock = threading.Lock()
+        self._scheduler = self._new_scheduler()
+
+    @staticmethod
+    def _new_scheduler() -> BackgroundScheduler:
+        return BackgroundScheduler(job_defaults={"max_instances": 1, "coalesce": True})
 
     def start(self) -> None:
+        if self._scheduler.running:
+            LOGGER.info("Scheduler already running")
+            return
+
         self._scheduler.add_job(
             self._run_inventory_delta_safely,
             trigger=IntervalTrigger(minutes=self.interval_minutes),
@@ -38,6 +46,9 @@ class SyncScheduler:
         if self._scheduler.running:
             self._scheduler.shutdown(wait=False)
             LOGGER.info("Scheduler stopped")
+            # APScheduler instances are not always safe to restart after shutdown,
+            # so create a fresh scheduler instance for resume.
+            self._scheduler = self._new_scheduler()
 
     def _run_inventory_delta_safely(self) -> None:
         self._run_with_lock(self.engine.run_delta_sync)
