@@ -4,6 +4,7 @@ __all__ = [
     "app",
     "db",
     "gui",
+    "host_setup",
     "logging_config",
     "models",
     "qb_adapter",

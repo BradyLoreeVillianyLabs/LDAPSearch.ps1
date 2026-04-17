@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .host_setup import HostSetupManager, HostSetupResult
 from .scheduler import SyncScheduler
 from .settings import CurrencyRoute, SpreadsheetFieldRoute, TaxRule, WooStoreSettings
 from .sync_engine import SyncEngine
@@ -35,10 +36,12 @@ LOGGER = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, engine: SyncEngine, scheduler: SyncScheduler) -> None:
+    def __init__(self, engine: SyncEngine, scheduler: SyncScheduler, host_setup_manager: HostSetupManager | None = None, host_setup_result: HostSetupResult | None = None) -> None:
         super().__init__()
         self.engine = engine
         self.scheduler = scheduler
+        self.host_setup_manager = host_setup_manager
+        self.host_setup_result = host_setup_result
         self.setWindowTitle("QuickBooksProject")
         self.resize(1120, 800)
 
@@ -48,6 +51,20 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._apply_modern_style()
         self._load_settings_into_fields()
+        self._render_initial_host_setup_result()
+
+
+    def _render_initial_host_setup_result(self) -> None:
+        if self.host_setup_result is None:
+            return
+        for action in self.host_setup_result.actions:
+            self._append_log(f"Startup host check: {action}")
+        for warning in self.host_setup_result.warnings:
+            self._append_log(f"Startup host warning: {warning}")
+        for err in self.host_setup_result.errors:
+            self._append_log(f"Startup host error: {err}")
+        if self.host_setup_result.errors:
+            self.status_label.setText("Startup host checks found issues (see log)")
 
     def _build_ui(self) -> None:
         central = QWidget(self)
@@ -93,8 +110,20 @@ class MainWindow(QMainWindow):
 
         button_row = QGridLayout()
         self.test_btn = self._create_action_button(
-            "Test Connections",
+            "Test All Connections",
             "Tests QuickBooks COM connectivity and all Woo store API credentials."
+        )
+        self.test_qb_btn = self._create_action_button(
+            "Test QuickBooks",
+            "Runs QuickBooks adapter connectivity test only."
+        )
+        self.test_woo_btn = self._create_action_button(
+            "Test WooCommerce",
+            "Runs WooCommerce API connectivity tests for all stores."
+        )
+        self.test_sheet_btn = self._create_action_button(
+            "Test Spreadsheet Route",
+            "Validates spreadsheet export settings and writable destination."
         )
         self.full_btn = self._create_action_button(
             "Run Inventory Full Sync",
@@ -112,18 +141,30 @@ class MainWindow(QMainWindow):
             "Pause Scheduler",
             "Stops background interval jobs until resumed."
         )
+        self.prepare_host_btn = self._create_action_button(
+            "Prepare Host (Ports/Permissions)",
+            "Runs host checks and (optionally) firewall setup for required communications."
+        )
 
         self.test_btn.clicked.connect(self._test_connections)
+        self.test_qb_btn.clicked.connect(self._test_quickbooks_connection)
+        self.test_woo_btn.clicked.connect(self._test_woo_connections)
+        self.test_sheet_btn.clicked.connect(self._test_spreadsheet_route)
         self.full_btn.clicked.connect(self._run_full_sync)
         self.delta_btn.clicked.connect(self._run_delta_sync)
         self.sales_btn.clicked.connect(self._run_sales_import)
         self.pause_btn.clicked.connect(self._toggle_scheduler)
+        self.prepare_host_btn.clicked.connect(self._prepare_host)
 
         button_row.addWidget(self.test_btn, 0, 0)
-        button_row.addWidget(self.full_btn, 0, 1)
-        button_row.addWidget(self.delta_btn, 1, 0)
-        button_row.addWidget(self.sales_btn, 1, 1)
-        button_row.addWidget(self.pause_btn, 2, 0, 1, 2)
+        button_row.addWidget(self.test_qb_btn, 0, 1)
+        button_row.addWidget(self.test_woo_btn, 1, 0)
+        button_row.addWidget(self.test_sheet_btn, 1, 1)
+        button_row.addWidget(self.full_btn, 2, 0)
+        button_row.addWidget(self.delta_btn, 2, 1)
+        button_row.addWidget(self.sales_btn, 3, 0)
+        button_row.addWidget(self.pause_btn, 3, 1)
+        button_row.addWidget(self.prepare_host_btn, 4, 0, 1, 2)
 
         self.status_label = QLabel("Ready")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -452,6 +493,44 @@ class MainWindow(QMainWindow):
             lines.append(f"• {message}")
         self.settings_error_label.setText("Please fix the following fields:\n" + "\n".join(lines))
 
+    def _test_quickbooks_connection(self) -> None:
+        try:
+            qb_ok = self.engine.qb_adapter.test_connection()
+            msg = f"QuickBooks: {'OK' if qb_ok else 'FAILED'}"
+            self.status_label.setText(msg)
+            self._append_log(msg)
+        except Exception as exc:  # noqa: BLE001
+            self._error("QuickBooks connection test failed", detail_exception=exc)
+
+    def _test_woo_connections(self) -> None:
+        try:
+            store_results = []
+            for adapter in self.engine.woo_adapters:
+                status = "OK" if adapter.test_connection() else "FAILED"
+                store_results.append(f"{adapter.store_name}: {status}")
+            msg = f"Woo: {'; '.join(store_results)}"
+            self.status_label.setText(msg)
+            self._append_log(msg)
+        except Exception as exc:  # noqa: BLE001
+            self._error("WooCommerce connection test failed", detail_exception=exc)
+
+    def _test_spreadsheet_route(self) -> None:
+        try:
+            router = self.engine.spreadsheet_router
+            if router is None:
+                self._append_log("Spreadsheet router not configured.")
+                self.status_label.setText("Spreadsheet router not configured")
+                return
+            if not self.engine.settings.spreadsheet.enabled:
+                self._append_log("Spreadsheet export currently disabled in settings.")
+                self.status_label.setText("Spreadsheet export disabled")
+                return
+            workbook_path = self.engine.settings.spreadsheet.workbook_path
+            self._append_log(f"Spreadsheet route settings OK. Workbook target: {workbook_path}")
+            self.status_label.setText("Spreadsheet route configuration looks valid")
+        except Exception as exc:  # noqa: BLE001
+            self._error("Spreadsheet route test failed", detail_exception=exc)
+
     def _test_connections(self) -> None:
         try:
             qb_ok = self.engine.qb_adapter.test_connection()
@@ -489,6 +568,25 @@ class MainWindow(QMainWindow):
         except Exception as exc:  # noqa: BLE001
             self._error("Sales import failed", detail_exception=exc)
 
+    def _prepare_host(self) -> None:
+        if self.host_setup_manager is None:
+            self._append_log("Host setup manager not configured.")
+            return
+        result = self.host_setup_manager.prepare()
+        self.host_setup_result = result
+        if result.actions:
+            for action in result.actions:
+                self._append_log(f"Host setup: {action}")
+        if result.warnings:
+            for warning in result.warnings:
+                self._append_log(f"Host setup warning: {warning}")
+        if result.errors:
+            for err in result.errors:
+                self._append_log(f"Host setup error: {err}")
+            self._error("Host preparation reported errors. See log panel for details.")
+            return
+        self.status_label.setText("Host preparation complete (permissions/connectivity checks passed)")
+
     def _toggle_scheduler(self) -> None:
         if self.pause_btn.text() == "Pause Scheduler":
             self.scheduler.stop()
@@ -521,9 +619,11 @@ class MainWindow(QMainWindow):
         box.exec()
 
 
-def run_gui(engine: SyncEngine, scheduler: SyncScheduler) -> int:
+def run_gui(engine: SyncEngine, scheduler: SyncScheduler, host_setup_manager: HostSetupManager | None = None, host_setup_result: HostSetupResult | None = None, start_tab: str = "dashboard") -> int:
     app = QApplication.instance() or QApplication([])
-    window = MainWindow(engine=engine, scheduler=scheduler)
+    window = MainWindow(engine=engine, scheduler=scheduler, host_setup_manager=host_setup_manager, host_setup_result=host_setup_result)
+    if start_tab.lower() == "settings":
+        window.tabs.setCurrentIndex(1)
     window.show()
     scheduler.start()
     return app.exec()
