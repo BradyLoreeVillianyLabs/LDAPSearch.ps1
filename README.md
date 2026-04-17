@@ -466,3 +466,43 @@ Important notes:
 - This feature does **not** bypass OS security; it reports errors when elevation is required.
 - If firewall rule creation fails, run the app elevated once or create rule manually.
 - If your environment uses proxy/security appliances, coordinate with IT to allow the QuickBooks host to reach your Woo API endpoint(s).
+
+---
+
+## 23) Windows 11 Pro installer build (guided setup launcher)
+
+This repository now includes installer tooling:
+
+- Inno Setup script: `installer/QuickBooksProject.iss`
+- Build script: `scripts/build_windows_installer.ps1`
+
+Build steps on Windows 11 Pro:
+
+1. Install Python 3.11+.
+2. Install Inno Setup 6.
+3. Run PowerShell as Administrator.
+4. Execute:
+
+```powershell
+./scripts/build_windows_installer.ps1
+```
+
+Outputs:
+- App EXE from PyInstaller in `dist/app` (or PyInstaller default dist path).
+- Installer EXE in `dist/installer`.
+
+Installer behavior:
+- Creates Start Menu/Desktop entries.
+- Launches app with `--first-run` so setup opens directly to Settings tab.
+
+---
+
+## 24) GitHub publication notes
+
+To publish publicly:
+
+1. Push this branch to your GitHub repository.
+2. In GitHub repository settings, set visibility to **Public**.
+3. Create a release and attach installer from `dist/installer`.
+
+> This coding environment cannot directly change your GitHub repo visibility settings without your account/token context.

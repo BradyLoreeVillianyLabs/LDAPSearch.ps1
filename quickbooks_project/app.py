@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+
 from .db import Database
 from .gui import run_gui
 from .host_setup import HostSetupManager
@@ -13,6 +15,10 @@ from .woo_adapter import WooAdapter
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="QuickBooksProject desktop sync app")
+    parser.add_argument("--first-run", action="store_true", help="Open app on Settings tab for initial setup")
+    args = parser.parse_args()
+
     settings = load_settings()
     setup_logging(settings.log_path)
 
@@ -38,8 +44,14 @@ def main() -> int:
     )
     scheduler = SyncScheduler(engine=engine, interval_minutes=settings.sync.interval_minutes)
 
-    # Pass host setup manager to GUI so admins can rerun checks manually.
-    return run_gui(engine=engine, scheduler=scheduler, host_setup_manager=host_setup, host_setup_result=host_result)
+    start_tab = "settings" if args.first_run else "dashboard"
+    return run_gui(
+        engine=engine,
+        scheduler=scheduler,
+        host_setup_manager=host_setup,
+        host_setup_result=host_result,
+        start_tab=start_tab,
+    )
 
 
 if __name__ == "__main__":

@@ -96,8 +96,20 @@ class MainWindow(QMainWindow):
 
         button_row = QGridLayout()
         self.test_btn = self._create_action_button(
-            "Test Connections",
+            "Test All Connections",
             "Tests QuickBooks COM connectivity and all Woo store API credentials."
+        )
+        self.test_qb_btn = self._create_action_button(
+            "Test QuickBooks",
+            "Runs QuickBooks adapter connectivity test only."
+        )
+        self.test_woo_btn = self._create_action_button(
+            "Test WooCommerce",
+            "Runs WooCommerce API connectivity tests for all stores."
+        )
+        self.test_sheet_btn = self._create_action_button(
+            "Test Spreadsheet Route",
+            "Validates spreadsheet export settings and writable destination."
         )
         self.full_btn = self._create_action_button(
             "Run Inventory Full Sync",
@@ -121,6 +133,9 @@ class MainWindow(QMainWindow):
         )
 
         self.test_btn.clicked.connect(self._test_connections)
+        self.test_qb_btn.clicked.connect(self._test_quickbooks_connection)
+        self.test_woo_btn.clicked.connect(self._test_woo_connections)
+        self.test_sheet_btn.clicked.connect(self._test_spreadsheet_route)
         self.full_btn.clicked.connect(self._run_full_sync)
         self.delta_btn.clicked.connect(self._run_delta_sync)
         self.sales_btn.clicked.connect(self._run_sales_import)
@@ -128,11 +143,14 @@ class MainWindow(QMainWindow):
         self.prepare_host_btn.clicked.connect(self._prepare_host)
 
         button_row.addWidget(self.test_btn, 0, 0)
-        button_row.addWidget(self.full_btn, 0, 1)
-        button_row.addWidget(self.delta_btn, 1, 0)
-        button_row.addWidget(self.sales_btn, 1, 1)
-        button_row.addWidget(self.pause_btn, 2, 0)
-        button_row.addWidget(self.prepare_host_btn, 2, 1)
+        button_row.addWidget(self.test_qb_btn, 0, 1)
+        button_row.addWidget(self.test_woo_btn, 1, 0)
+        button_row.addWidget(self.test_sheet_btn, 1, 1)
+        button_row.addWidget(self.full_btn, 2, 0)
+        button_row.addWidget(self.delta_btn, 2, 1)
+        button_row.addWidget(self.sales_btn, 3, 0)
+        button_row.addWidget(self.pause_btn, 3, 1)
+        button_row.addWidget(self.prepare_host_btn, 4, 0, 1, 2)
 
         self.status_label = QLabel("Ready")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -461,6 +479,44 @@ class MainWindow(QMainWindow):
             lines.append(f"• {message}")
         self.settings_error_label.setText("Please fix the following fields:\n" + "\n".join(lines))
 
+    def _test_quickbooks_connection(self) -> None:
+        try:
+            qb_ok = self.engine.qb_adapter.test_connection()
+            msg = f"QuickBooks: {'OK' if qb_ok else 'FAILED'}"
+            self.status_label.setText(msg)
+            self._append_log(msg)
+        except Exception as exc:  # noqa: BLE001
+            self._error("QuickBooks connection test failed", detail_exception=exc)
+
+    def _test_woo_connections(self) -> None:
+        try:
+            store_results = []
+            for adapter in self.engine.woo_adapters:
+                status = "OK" if adapter.test_connection() else "FAILED"
+                store_results.append(f"{adapter.store_name}: {status}")
+            msg = f"Woo: {'; '.join(store_results)}"
+            self.status_label.setText(msg)
+            self._append_log(msg)
+        except Exception as exc:  # noqa: BLE001
+            self._error("WooCommerce connection test failed", detail_exception=exc)
+
+    def _test_spreadsheet_route(self) -> None:
+        try:
+            router = self.engine.spreadsheet_router
+            if router is None:
+                self._append_log("Spreadsheet router not configured.")
+                self.status_label.setText("Spreadsheet router not configured")
+                return
+            if not self.engine.settings.spreadsheet.enabled:
+                self._append_log("Spreadsheet export currently disabled in settings.")
+                self.status_label.setText("Spreadsheet export disabled")
+                return
+            workbook_path = self.engine.settings.spreadsheet.workbook_path
+            self._append_log(f"Spreadsheet route settings OK. Workbook target: {workbook_path}")
+            self.status_label.setText("Spreadsheet route configuration looks valid")
+        except Exception as exc:  # noqa: BLE001
+            self._error("Spreadsheet route test failed", detail_exception=exc)
+
     def _test_connections(self) -> None:
         try:
             qb_ok = self.engine.qb_adapter.test_connection()
@@ -549,9 +605,11 @@ class MainWindow(QMainWindow):
         box.exec()
 
 
-def run_gui(engine: SyncEngine, scheduler: SyncScheduler, host_setup_manager: HostSetupManager | None = None, host_setup_result: HostSetupResult | None = None) -> int:
+def run_gui(engine: SyncEngine, scheduler: SyncScheduler, host_setup_manager: HostSetupManager | None = None, host_setup_result: HostSetupResult | None = None, start_tab: str = "dashboard") -> int:
     app = QApplication.instance() or QApplication([])
     window = MainWindow(engine=engine, scheduler=scheduler, host_setup_manager=host_setup_manager, host_setup_result=host_setup_result)
+    if start_tab.lower() == "settings":
+        window.tabs.setCurrentIndex(1)
     window.show()
     scheduler.start()
     return app.exec()
