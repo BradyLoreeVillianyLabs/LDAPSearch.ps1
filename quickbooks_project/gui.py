@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 
 from PySide6.QtCore import Qt
@@ -23,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from .scheduler import SyncScheduler
-from .settings import WooStoreSettings
+from .settings import CurrencyRoute, TaxRule, WooStoreSettings
 from .sync_engine import SyncEngine
 
 LOGGER = logging.getLogger(__name__)
@@ -110,7 +111,7 @@ class MainWindow(QMainWindow):
 
         info = QLabel(
             "Enter required QuickBooks/WooCommerce settings below. "
-            "Fields with validation errors are highlighted in red with explicit messages."
+            "You can fully customize tax rules and currency routing via JSON fields."
         )
         info.setWordWrap(True)
 
@@ -122,12 +123,11 @@ class MainWindow(QMainWindow):
             "woo_base_url": QLineEdit(),
             "woo_consumer_key": QLineEdit(),
             "woo_consumer_secret": QLineEdit(),
-            "tax_default_code": QLineEdit(),
-            "tax_gst_code": QLineEdit(),
-            "tax_hst_code": QLineEdit(),
-            "tax_pst_code": QLineEdit(),
-            "cad_deposit_account": QLineEdit(),
-            "usd_deposit_account": QLineEdit(),
+            "default_tax_code": QLineEdit(),
+            "default_tax_name": QLineEdit(),
+            "tax_rules_json": QLineEdit(),
+            "default_deposit_account": QLineEdit(),
+            "currency_routes_json": QLineEdit(),
             "qbxml_versions": QLineEdit(),
         }
 
@@ -137,12 +137,11 @@ class MainWindow(QMainWindow):
         form.addRow("Woo base URL (https://...)", self.settings_fields["woo_base_url"])
         form.addRow("Woo consumer key", self.settings_fields["woo_consumer_key"])
         form.addRow("Woo consumer secret", self.settings_fields["woo_consumer_secret"])
-        form.addRow("Default tax code", self.settings_fields["tax_default_code"])
-        form.addRow("GST tax code", self.settings_fields["tax_gst_code"])
-        form.addRow("HST tax code", self.settings_fields["tax_hst_code"])
-        form.addRow("PST tax code", self.settings_fields["tax_pst_code"])
-        form.addRow("CAD deposit account", self.settings_fields["cad_deposit_account"])
-        form.addRow("USD deposit account", self.settings_fields["usd_deposit_account"])
+        form.addRow("Default tax code", self.settings_fields["default_tax_code"])
+        form.addRow("Default tax name", self.settings_fields["default_tax_name"])
+        form.addRow("Tax rules JSON", self.settings_fields["tax_rules_json"])
+        form.addRow("Default deposit account", self.settings_fields["default_deposit_account"])
+        form.addRow("Currency routes JSON", self.settings_fields["currency_routes_json"])
         form.addRow("QBXML versions (comma-separated)", self.settings_fields["qbxml_versions"])
 
         self.settings_error_label = QLabel("")
@@ -174,13 +173,18 @@ class MainWindow(QMainWindow):
         self.settings_fields["woo_consumer_key"].setText(store.consumer_key)
         self.settings_fields["woo_consumer_secret"].setText(store.consumer_secret)
 
-        self.settings_fields["tax_default_code"].setText(self.engine.settings.tax.default_tax_code)
-        self.settings_fields["tax_gst_code"].setText(self.engine.settings.tax.gst_tax_code)
-        self.settings_fields["tax_hst_code"].setText(self.engine.settings.tax.hst_tax_code)
-        self.settings_fields["tax_pst_code"].setText(self.engine.settings.tax.pst_tax_code)
+        self.settings_fields["default_tax_code"].setText(self.engine.settings.tax.default_tax_code)
+        self.settings_fields["default_tax_name"].setText(self.engine.settings.tax.default_tax_name)
+        self.settings_fields["tax_rules_json"].setText(
+            json.dumps([r.model_dump() for r in self.engine.settings.tax.tax_rules])
+        )
 
-        self.settings_fields["cad_deposit_account"].setText(self.engine.settings.currency_accounts.cad_deposit_account)
-        self.settings_fields["usd_deposit_account"].setText(self.engine.settings.currency_accounts.usd_deposit_account)
+        self.settings_fields["default_deposit_account"].setText(
+            self.engine.settings.currency_accounts.default_deposit_account
+        )
+        self.settings_fields["currency_routes_json"].setText(
+            json.dumps([r.model_dump() for r in self.engine.settings.currency_accounts.routes])
+        )
         self.settings_fields["qbxml_versions"].setText(", ".join(self.engine.qb_adapter.qbxml_versions))
 
     def _append_log(self, text: str) -> None:
@@ -209,14 +213,11 @@ class MainWindow(QMainWindow):
         base_url = require("woo_base_url", "Woo base URL")
         consumer_key = require("woo_consumer_key", "Woo consumer key")
         consumer_secret = require("woo_consumer_secret", "Woo consumer secret")
-
-        require("tax_default_code", "Default tax code")
-        require("tax_gst_code", "GST tax code")
-        require("tax_hst_code", "HST tax code")
-        require("tax_pst_code", "PST tax code")
-        require("cad_deposit_account", "CAD deposit account")
-        require("usd_deposit_account", "USD deposit account")
-
+        require("default_tax_code", "Default tax code")
+        require("default_tax_name", "Default tax name")
+        tax_rules_json = require("tax_rules_json", "Tax rules JSON")
+        require("default_deposit_account", "Default deposit account")
+        currency_routes_json = require("currency_routes_json", "Currency routes JSON")
         qbxml_versions = require("qbxml_versions", "QBXML versions")
 
         if base_url and not (base_url.startswith("https://") or base_url.startswith("http://")):
@@ -225,6 +226,24 @@ class MainWindow(QMainWindow):
             self.field_errors["woo_consumer_key"] = "Woo consumer key should typically start with ck_"
         if consumer_secret and not consumer_secret.startswith("cs_"):
             self.field_errors["woo_consumer_secret"] = "Woo consumer secret should typically start with cs_"
+
+        try:
+            rules_data = json.loads(tax_rules_json)
+            if not isinstance(rules_data, list):
+                raise ValueError("Tax rules must be a JSON list")
+            for row in rules_data:
+                TaxRule.model_validate(row)
+        except Exception as exc:  # noqa: BLE001
+            self.field_errors["tax_rules_json"] = f"Tax rules JSON invalid: {exc}"
+
+        try:
+            routes_data = json.loads(currency_routes_json)
+            if not isinstance(routes_data, list):
+                raise ValueError("Currency routes must be a JSON list")
+            for row in routes_data:
+                CurrencyRoute.model_validate(row)
+        except Exception as exc:  # noqa: BLE001
+            self.field_errors["currency_routes_json"] = f"Currency routes JSON invalid: {exc}"
 
         versions = [v.strip() for v in qbxml_versions.split(",") if v.strip()]
         if not versions:
@@ -252,21 +271,23 @@ class MainWindow(QMainWindow):
                 enabled=True,
             )
 
-            # Apply Woo settings to all adapters at runtime for consistency.
             for adapter in self.engine.woo_adapters:
                 adapter.reconfigure(store)
 
-            self.engine.settings.tax.default_tax_code = self.settings_fields["tax_default_code"].text().strip()
-            self.engine.settings.tax.gst_tax_code = self.settings_fields["tax_gst_code"].text().strip()
-            self.engine.settings.tax.hst_tax_code = self.settings_fields["tax_hst_code"].text().strip()
-            self.engine.settings.tax.pst_tax_code = self.settings_fields["tax_pst_code"].text().strip()
+            self.engine.settings.tax.default_tax_code = self.settings_fields["default_tax_code"].text().strip()
+            self.engine.settings.tax.default_tax_name = self.settings_fields["default_tax_name"].text().strip()
+            self.engine.settings.tax.tax_rules = [
+                TaxRule.model_validate(row)
+                for row in json.loads(self.settings_fields["tax_rules_json"].text().strip())
+            ]
 
-            self.engine.settings.currency_accounts.cad_deposit_account = (
-                self.settings_fields["cad_deposit_account"].text().strip()
+            self.engine.settings.currency_accounts.default_deposit_account = (
+                self.settings_fields["default_deposit_account"].text().strip()
             )
-            self.engine.settings.currency_accounts.usd_deposit_account = (
-                self.settings_fields["usd_deposit_account"].text().strip()
-            )
+            self.engine.settings.currency_accounts.routes = [
+                CurrencyRoute.model_validate(row)
+                for row in json.loads(self.settings_fields["currency_routes_json"].text().strip())
+            ]
 
             versions = [v.strip() for v in self.settings_fields["qbxml_versions"].text().split(",") if v.strip()]
             self.engine.settings.quickbooks.qbxml_versions = versions

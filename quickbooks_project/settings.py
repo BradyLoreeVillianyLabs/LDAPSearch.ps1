@@ -28,16 +28,46 @@ class SyncSettings(BaseModel):
     order_lookback_minutes: int = Field(default=120, ge=1, le=10080)
 
 
+class TaxRule(BaseModel):
+    country: str
+    state: str = "*"
+    tax_code: str
+    tax_name: str
+    rate_percent: float = 0.0
+
+
 class TaxSettings(BaseModel):
     default_tax_code: str = "NON"
-    gst_tax_code: str = "GST"
-    hst_tax_code: str = "HST"
-    pst_tax_code: str = "PST"
+    default_tax_name: str = "No Tax"
+    default_tax_rate_percent: float = 0.0
+    tax_rules: list[TaxRule] = Field(
+        default_factory=lambda: [
+            TaxRule(country="CA", state="ON", tax_code="HST", tax_name="HST", rate_percent=13.0),
+            TaxRule(country="CA", state="NB", tax_code="HST", tax_name="HST", rate_percent=15.0),
+            TaxRule(country="CA", state="NL", tax_code="HST", tax_name="HST", rate_percent=15.0),
+            TaxRule(country="CA", state="NS", tax_code="HST", tax_name="HST", rate_percent=15.0),
+            TaxRule(country="CA", state="PE", tax_code="HST", tax_name="HST", rate_percent=15.0),
+            TaxRule(country="CA", state="BC", tax_code="PST", tax_name="PST+GST", rate_percent=12.0),
+            TaxRule(country="CA", state="SK", tax_code="PST", tax_name="PST+GST", rate_percent=11.0),
+            TaxRule(country="CA", state="MB", tax_code="PST", tax_name="PST+GST", rate_percent=12.0),
+            TaxRule(country="CA", state="*", tax_code="GST", tax_name="GST", rate_percent=5.0),
+        ]
+    )
+
+
+class CurrencyRoute(BaseModel):
+    currency: str
+    deposit_account: str
 
 
 class CurrencyAccountSettings(BaseModel):
-    cad_deposit_account: str = "Undeposited Funds CAD"
-    usd_deposit_account: str = "Undeposited Funds USD"
+    default_deposit_account: str = "Undeposited Funds CAD"
+    routes: list[CurrencyRoute] = Field(
+        default_factory=lambda: [
+            CurrencyRoute(currency="CAD", deposit_account="Undeposited Funds CAD"),
+            CurrencyRoute(currency="USD", deposit_account="Undeposited Funds USD"),
+        ]
+    )
 
 
 class AppSettings(BaseSettings):

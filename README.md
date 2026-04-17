@@ -1,10 +1,8 @@
 # QuickBooksProject (QuickBooks Desktop ↔ WooCommerce Sync)
 
-A beginner-friendly desktop application that syncs data between **QuickBooks Desktop (Enterprise)** and **WooCommerce**.
 
-- ✅ **QuickBooks remains the source of truth for inventory**.
+
 - ✅ Pushes QuickBooks inventory to WooCommerce by SKU.
-- ✅ Imports WooCommerce sales into QuickBooks as Sales Receipts.
 - ✅ Picks tax code (GST / HST / PST) based on order location.
 - ✅ Routes USD and CAD sales to different QuickBooks deposit accounts.
 - ✅ Supports one or multiple Woo stores.
@@ -121,6 +119,14 @@ Then run:
 python -m quickbooks_project.app
 ```
 
+Optional advanced customization via environment variables:
+
+```powershell
+$env:QB_WOO__TAX__TAX_RULES = '[{"country":"CA","state":"ON","tax_code":"HST","tax_name":"HST","rate_percent":13.0},{"country":"CA","state":"*","tax_code":"GST","tax_name":"GST","rate_percent":5.0}]'
+$env:QB_WOO__CURRENCY_ACCOUNTS__ROUTES = '[{"currency":"CAD","deposit_account":"Undeposited Funds CAD"},{"currency":"USD","deposit_account":"Undeposited Funds USD"}]'
+$env:QB_WOO__CURRENCY_ACCOUNTS__DEFAULT_DEPOSIT_ACCOUNT = "Undeposited Funds CAD"
+```
+
 ## Multi-store setup (future-ready)
 
 Use `QB_WOO__WOO_STORES` as a JSON array:
@@ -205,17 +211,19 @@ By default, SQLite is `state.db` with tables:
 
 ## 8) Taxes and currency routing
 
-Current built-in tax logic:
+Tax logic is now fully customizable using rule lists (GUI or env settings):
 
-- Non-CA country → `default_tax_code`.
-- CA provinces ON/NB/NL/NS/PE → HST code.
-- CA provinces BC/SK/MB → PST code (combined behavior placeholder).
-- Other CA provinces/territories → GST code.
+- `tax.default_tax_code` / `tax.default_tax_name` / `tax.default_tax_rate_percent`
+- `tax.tax_rules[]` with per-country/per-state rules, each containing:
+  - `country`, `state` (`*` supported), `tax_code`, `tax_name`, `rate_percent`
 
-Currency account routing:
+Currency routing is also fully customizable:
 
-- `USD` → `usd_deposit_account`
-- everything else → `cad_deposit_account`
+- `currency_accounts.default_deposit_account`
+- `currency_accounts.routes[]` entries containing:
+  - `currency`, `deposit_account`
+
+GUI Settings tab supports editing both via JSON fields with validation errors tied to the exact field.
 
 > Important: Verify tax codes and account names exactly match your QuickBooks company file.
 

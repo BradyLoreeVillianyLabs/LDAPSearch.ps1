@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from .db import Database
 from .models import InventoryItem, ItemSyncOutcome, SyncItemResult, SyncRunSummary, TaxDecision, WooOrder
 from .qb_adapter import QuickBooksAdapter
-from .settings import AppSettings
+from .settings import AppSettings, CurrencyRoute, TaxRule
 from .woo_adapter import WooAdapter
 
 LOGGER = logging.getLogger(__name__)
@@ -153,23 +153,27 @@ class SyncEngine:
             )
 
     def _decide_tax(self, order: WooOrder) -> TaxDecision:
-        # Canada defaults by province (simplified; can be replaced by tax table file later)
-        province = order.state.upper()
-        country = order.country.upper()
-        if country != "CA":
-            return TaxDecision(tax_code=self.settings.tax.default_tax_code, tax_name="No Tax", rate_percent=0.0)
+        country = order.country.upper().strip()
+        state = order.state.upper().strip()
 
-        hst_provinces = {"ON", "NB", "NL", "NS", "PE"}
-        pst_provinces = {"BC", "SK", "MB"}
+        for rule in self.settings.tax.tax_rules:
+            r = TaxRule.model_validate(rule)
+            if r.country.upper() != country:
+                continue
+            if r.state != "*" and r.state.upper() != state:
+                continue
+            return TaxDecision(tax_code=r.tax_code, tax_name=r.tax_name, rate_percent=r.rate_percent)
 
-        if province in hst_provinces:
-            return TaxDecision(tax_code=self.settings.tax.hst_tax_code, tax_name="HST", rate_percent=13.0)
-        if province in pst_provinces:
-            return TaxDecision(tax_code=self.settings.tax.pst_tax_code, tax_name="PST+GST", rate_percent=12.0)
-        return TaxDecision(tax_code=self.settings.tax.gst_tax_code, tax_name="GST", rate_percent=5.0)
+        return TaxDecision(
+            tax_code=self.settings.tax.default_tax_code,
+            tax_name=self.settings.tax.default_tax_name,
+            rate_percent=self.settings.tax.default_tax_rate_percent,
+        )
 
     def _decide_deposit_account(self, currency: str) -> str:
         c = currency.upper().strip()
-        if c == "USD":
-            return self.settings.currency_accounts.usd_deposit_account
-        return self.settings.currency_accounts.cad_deposit_account
+        for route in self.settings.currency_accounts.routes:
+            r = CurrencyRoute.model_validate(route)
+            if r.currency.upper() == c:
+                return r.deposit_account
+        return self.settings.currency_accounts.default_deposit_account
