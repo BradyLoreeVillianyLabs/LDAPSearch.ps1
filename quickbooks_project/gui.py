@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+import traceback
+from datetime import datetime
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPalette
@@ -9,6 +11,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -36,50 +39,78 @@ class MainWindow(QMainWindow):
         self.engine = engine
         self.scheduler = scheduler
         self.setWindowTitle("QuickBooksProject")
-        self.resize(1050, 760)
+        self.resize(1120, 800)
 
         self.field_errors: dict[str, str] = {}
         self.settings_fields: dict[str, QLineEdit] = {}
 
         self._build_ui()
+        self._apply_modern_style()
         self._load_settings_into_fields()
 
     def _build_ui(self) -> None:
         central = QWidget(self)
         root = QVBoxLayout(central)
+        root.setContentsMargins(14, 14, 14, 14)
+        root.setSpacing(10)
+
+        title = QLabel("QuickBooksProject Control Center")
+        title.setObjectName("titleLabel")
+        subtitle = QLabel("Manage connections, sync jobs, tax rules, currency routing, and compatibility settings")
+        subtitle.setObjectName("subtitleLabel")
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_dashboard_tab(), "Dashboard")
         self.tabs.addTab(self._build_settings_tab(), "Settings")
 
+        root.addWidget(title)
+        root.addWidget(subtitle)
         root.addWidget(self.tabs)
         self.setCentralWidget(central)
 
     def _build_dashboard_tab(self) -> QWidget:
         tab = QWidget()
         layout = QVBoxLayout(tab)
+        layout.setSpacing(10)
 
-        settings_group = QGroupBox("Sync Settings")
+        settings_group = QGroupBox("Sync Runtime")
         settings_form = QFormLayout(settings_group)
 
         self.dry_run_checkbox = QCheckBox("Dry run (no writes to WooCommerce or QuickBooks)")
         self.dry_run_checkbox.setChecked(self.engine.dry_run)
         self.dry_run_checkbox.stateChanged.connect(self._on_dry_run_toggled)
+        self.dry_run_checkbox.setToolTip("When enabled, sync operations simulate writes and log planned changes only.")
 
         self.interval_spin = QSpinBox()
         self.interval_spin.setRange(1, 1440)
         self.interval_spin.setValue(self.scheduler.interval_minutes)
         self.interval_spin.valueChanged.connect(self._on_interval_changed)
+        self.interval_spin.setToolTip("Scheduler run interval in minutes.")
 
         settings_form.addRow(self.dry_run_checkbox)
         settings_form.addRow("Scheduler interval (minutes)", self.interval_spin)
 
-        button_row = QHBoxLayout()
-        self.test_btn = QPushButton("Test Connections")
-        self.full_btn = QPushButton("Run Inventory Full Sync")
-        self.delta_btn = QPushButton("Run Inventory Delta Sync")
-        self.sales_btn = QPushButton("Import Woo Sales → QuickBooks")
-        self.pause_btn = QPushButton("Pause Scheduler")
+        button_row = QGridLayout()
+        self.test_btn = self._create_action_button(
+            "Test Connections",
+            "Tests QuickBooks COM connectivity and all Woo store API credentials."
+        )
+        self.full_btn = self._create_action_button(
+            "Run Inventory Full Sync",
+            "Pushes complete QuickBooks inventory snapshot to Woo stores."
+        )
+        self.delta_btn = self._create_action_button(
+            "Run Inventory Delta Sync",
+            "Pushes only recently changed QuickBooks inventory to Woo stores."
+        )
+        self.sales_btn = self._create_action_button(
+            "Import Woo Sales → QuickBooks",
+            "Imports Woo completed/processing orders as QuickBooks sales receipts."
+        )
+        self.pause_btn = self._create_action_button(
+            "Pause Scheduler",
+            "Stops background interval jobs until resumed."
+        )
 
         self.test_btn.clicked.connect(self._test_connections)
         self.full_btn.clicked.connect(self._run_full_sync)
@@ -87,17 +118,19 @@ class MainWindow(QMainWindow):
         self.sales_btn.clicked.connect(self._run_sales_import)
         self.pause_btn.clicked.connect(self._toggle_scheduler)
 
-        button_row.addWidget(self.test_btn)
-        button_row.addWidget(self.full_btn)
-        button_row.addWidget(self.delta_btn)
-        button_row.addWidget(self.sales_btn)
-        button_row.addWidget(self.pause_btn)
+        button_row.addWidget(self.test_btn, 0, 0)
+        button_row.addWidget(self.full_btn, 0, 1)
+        button_row.addWidget(self.delta_btn, 1, 0)
+        button_row.addWidget(self.sales_btn, 1, 1)
+        button_row.addWidget(self.pause_btn, 2, 0, 1, 2)
 
         self.status_label = QLabel("Ready")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.status_label.setObjectName("statusLabel")
 
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
+        self.log_text.setPlaceholderText("Operation log will appear here...")
 
         layout.addWidget(settings_group)
         layout.addLayout(button_row)
@@ -105,17 +138,22 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.log_text)
         return tab
 
+    def _create_action_button(self, text: str, help_text: str) -> QPushButton:
+        btn = QPushButton(text)
+        btn.setToolTip(help_text)
+        return btn
+
     def _build_settings_tab(self) -> QWidget:
         tab = QWidget()
         layout = QVBoxLayout(tab)
 
         info = QLabel(
-            "Enter required QuickBooks/WooCommerce settings below. "
-            "You can fully customize tax rules and currency routing via JSON fields."
+            "Required fields are explicit below. Hover the ? icons for guidance. "
+            "Validation errors identify exactly which field to correct."
         )
         info.setWordWrap(True)
 
-        group = QGroupBox("Required Configuration")
+        group = QGroupBox("Configuration")
         form = QFormLayout(group)
 
         self.settings_fields = {
@@ -133,16 +171,16 @@ class MainWindow(QMainWindow):
 
         self.settings_fields["woo_consumer_secret"].setEchoMode(QLineEdit.EchoMode.Password)
 
-        form.addRow("Woo store name", self.settings_fields["woo_store_name"])
-        form.addRow("Woo base URL (https://...)", self.settings_fields["woo_base_url"])
-        form.addRow("Woo consumer key", self.settings_fields["woo_consumer_key"])
-        form.addRow("Woo consumer secret", self.settings_fields["woo_consumer_secret"])
-        form.addRow("Default tax code", self.settings_fields["default_tax_code"])
-        form.addRow("Default tax name", self.settings_fields["default_tax_name"])
-        form.addRow("Tax rules JSON", self.settings_fields["tax_rules_json"])
-        form.addRow("Default deposit account", self.settings_fields["default_deposit_account"])
-        form.addRow("Currency routes JSON", self.settings_fields["currency_routes_json"])
-        form.addRow("QBXML versions (comma-separated)", self.settings_fields["qbxml_versions"])
+        self._add_form_row_help(form, "Woo store name", self.settings_fields["woo_store_name"], "Friendly name for this Woo store.")
+        self._add_form_row_help(form, "Woo base URL", self.settings_fields["woo_base_url"], "Your WooCommerce site URL, e.g. https://store.example.com")
+        self._add_form_row_help(form, "Woo consumer key", self.settings_fields["woo_consumer_key"], "REST API key from WooCommerce (typically starts with ck_).")
+        self._add_form_row_help(form, "Woo consumer secret", self.settings_fields["woo_consumer_secret"], "REST API secret from WooCommerce (typically starts with cs_).")
+        self._add_form_row_help(form, "Default tax code", self.settings_fields["default_tax_code"], "Fallback QuickBooks tax code when no rule matches.")
+        self._add_form_row_help(form, "Default tax name", self.settings_fields["default_tax_name"], "Friendly fallback tax name shown in logs.")
+        self._add_form_row_help(form, "Tax rules JSON", self.settings_fields["tax_rules_json"], "JSON list of rules: [{country,state,tax_code,tax_name,rate_percent}].")
+        self._add_form_row_help(form, "Default deposit account", self.settings_fields["default_deposit_account"], "Fallback account if currency route is not found.")
+        self._add_form_row_help(form, "Currency routes JSON", self.settings_fields["currency_routes_json"], "JSON list of routes: [{currency,deposit_account}].")
+        self._add_form_row_help(form, "QBXML versions", self.settings_fields["qbxml_versions"], "Comma-separated compatibility fallback order, e.g. 13.0,12.0,11.0")
 
         self.settings_error_label = QLabel("")
         self.settings_error_label.setStyleSheet("color: #b91c1c;")
@@ -150,7 +188,7 @@ class MainWindow(QMainWindow):
 
         button_row = QHBoxLayout()
         self.validate_btn = QPushButton("Validate Fields")
-        self.save_btn = QPushButton("Save + Apply Runtime Settings")
+        self.save_btn = QPushButton("Save + Apply")
         self.validate_btn.clicked.connect(self._validate_settings_form)
         self.save_btn.clicked.connect(self._save_and_apply_settings)
 
@@ -163,6 +201,44 @@ class MainWindow(QMainWindow):
         layout.addLayout(button_row)
         layout.addStretch(1)
         return tab
+
+    def _add_form_row_help(self, form: QFormLayout, label: str, field: QWidget, help_text: str) -> None:
+        label_widget = QWidget()
+        hl = QHBoxLayout(label_widget)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.setSpacing(6)
+
+        l = QLabel(label)
+        q = QLabel("?")
+        q.setObjectName("helpBadge")
+        q.setToolTip(help_text)
+        q.setStatusTip(help_text)
+
+        hl.addWidget(l)
+        hl.addWidget(q)
+        hl.addStretch(1)
+
+        form.addRow(label_widget, field)
+
+    def _apply_modern_style(self) -> None:
+        self.setStyleSheet(
+            """
+            QWidget { background: #f4f7fb; color: #0f172a; font-size: 13px; }
+            #titleLabel { font-size: 22px; font-weight: 700; color: #0b3b8c; }
+            #subtitleLabel { color: #334155; }
+            #statusLabel { background: #e2e8f0; border-radius: 8px; padding: 8px; }
+            QGroupBox { border: 1px solid #dbe3ef; border-radius: 10px; margin-top: 10px; padding: 10px; font-weight: 600; background: #ffffff; }
+            QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }
+            QPushButton { background: #1d4ed8; color: white; border: none; border-radius: 8px; padding: 8px 12px; }
+            QPushButton:hover { background: #1e40af; }
+            QPushButton:pressed { background: #1e3a8a; }
+            QLineEdit, QSpinBox, QTextEdit { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px; }
+            #helpBadge { background: #e2e8f0; color: #1e293b; border: 1px solid #94a3b8; border-radius: 8px; padding: 1px 6px; font-weight: 700; }
+            QTabWidget::pane { border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; }
+            QTabBar::tab { background: #e2e8f0; border-radius: 6px; padding: 8px 12px; margin-right: 4px; }
+            QTabBar::tab:selected { background: #bfdbfe; color: #1e3a8a; }
+            """
+        )
 
     def _load_settings_into_fields(self) -> None:
         if not self.engine.woo_adapters:
@@ -188,7 +264,8 @@ class MainWindow(QMainWindow):
         self.settings_fields["qbxml_versions"].setText(", ".join(self.engine.qb_adapter.qbxml_versions))
 
     def _append_log(self, text: str) -> None:
-        self.log_text.append(text)
+        ts = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        self.log_text.append(f"[{ts}] {text}")
         LOGGER.info(text)
 
     def _on_dry_run_toggled(self, state: int) -> None:
@@ -297,8 +374,10 @@ class MainWindow(QMainWindow):
             self.settings_error_label.setText("Settings applied successfully for this runtime session.")
             self._append_log("Settings validated and applied at runtime.")
         except Exception as exc:  # noqa: BLE001
-            self.settings_error_label.setStyleSheet("color: #b91c1c;")
-            self.settings_error_label.setText(f"Could not apply settings: {exc}")
+            self._error(
+                "Failed to apply settings. Check highlighted fields and JSON syntax.",
+                detail_exception=exc,
+            )
 
     def _clear_field_error_styles(self) -> None:
         for field in self.settings_fields.values():
@@ -331,7 +410,7 @@ class MainWindow(QMainWindow):
             self.status_label.setText(msg)
             self._append_log(msg)
         except Exception as exc:  # noqa: BLE001
-            self._error(str(exc))
+            self._error("Connection test failed", detail_exception=exc)
 
     def _run_full_sync(self) -> None:
         try:
@@ -339,7 +418,7 @@ class MainWindow(QMainWindow):
             self._append_log(f"Inventory full sync complete: {summary.as_dict()}")
             self.status_label.setText(f"Inventory full sync status: {summary.status}")
         except Exception as exc:  # noqa: BLE001
-            self._error(str(exc))
+            self._error("Inventory full sync failed", detail_exception=exc)
 
     def _run_delta_sync(self) -> None:
         try:
@@ -347,7 +426,7 @@ class MainWindow(QMainWindow):
             self._append_log(f"Inventory delta sync complete: {summary.as_dict()}")
             self.status_label.setText(f"Inventory delta sync status: {summary.status}")
         except Exception as exc:  # noqa: BLE001
-            self._error(str(exc))
+            self._error("Inventory delta sync failed", detail_exception=exc)
 
     def _run_sales_import(self) -> None:
         try:
@@ -355,7 +434,7 @@ class MainWindow(QMainWindow):
             self._append_log(f"Woo sales import complete: {summary.as_dict()}")
             self.status_label.setText(f"Sales import status: {summary.status}")
         except Exception as exc:  # noqa: BLE001
-            self._error(str(exc))
+            self._error("Sales import failed", detail_exception=exc)
 
     def _toggle_scheduler(self) -> None:
         if self.pause_btn.text() == "Pause Scheduler":
@@ -367,10 +446,26 @@ class MainWindow(QMainWindow):
         self.pause_btn.setText("Pause Scheduler")
         self._append_log("Scheduler resumed")
 
-    def _error(self, message: str) -> None:
+    def _error(self, message: str, detail_exception: Exception | None = None) -> None:
+        detail_text = ""
+        if detail_exception is not None:
+            detail_text = "\n".join(traceback.format_exception(type(detail_exception), detail_exception, detail_exception.__traceback__))
+
+        user_text = (
+            f"{message}.\n\n"
+            "Please check Settings values, API credentials, QBXML version fallback, and network connectivity."
+        )
         self.status_label.setText(f"Error: {message}")
         self._append_log(f"Error: {message}")
-        QMessageBox.critical(self, "Sync error", message)
+        LOGGER.error("%s", message, exc_info=detail_exception)
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Critical)
+        box.setWindowTitle("Sync error")
+        box.setText(user_text)
+        if detail_text:
+            box.setDetailedText(detail_text)
+        box.exec()
 
 
 def run_gui(engine: SyncEngine, scheduler: SyncScheduler) -> int:

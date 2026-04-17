@@ -300,3 +300,15 @@ python -m quickbooks_project.app
 
 If you want this fully self-hosted (no Intuit cloud services), see `SELF_HOSTED_DEPLOYMENT.md`.
 
+
+---
+
+## 15) Modern UX + Operability Improvements
+
+Recent updates added:
+- modernized visual styling in the desktop GUI,
+- hover help badges (?) for settings labels,
+- verbose error dialogs with technical details,
+- rotating verbose log files for easier diagnostics.
+
+These improvements align with common strengths seen in well-reviewed open-source inventory tools (strong tracking/auditability, explicit settings, and actionable error feedback).
