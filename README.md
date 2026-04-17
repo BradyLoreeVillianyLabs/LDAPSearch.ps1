@@ -1,7 +1,5 @@
 # QuickBooksProject (QuickBooks Desktop ↔ WooCommerce Sync)
 
-Project summary: see `PROJECT_DESCRIPTION.md` for a concise project overview.
-
 
 
 - ✅ Pushes QuickBooks inventory to WooCommerce by SKU.
