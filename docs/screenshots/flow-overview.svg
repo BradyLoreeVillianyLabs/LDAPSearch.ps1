@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="500" viewBox="0 0 1200 500">
+  <rect width="1200" height="500" fill="#f8fafc"/>
+  <text x="40" y="50" font-family="Segoe UI, Arial" font-size="28" fill="#0f172a">QuickBooks + WooCommerce Sync Flow</text>
+
+  <rect x="70" y="120" width="300" height="100" rx="12" fill="#dbeafe" stroke="#60a5fa"/>
+  <text x="95" y="160" font-family="Segoe UI, Arial" font-size="18" fill="#1e3a8a">QuickBooks Desktop</text>
+  <text x="95" y="188" font-family="Segoe UI, Arial" font-size="14" fill="#1e3a8a">Authoritative inventory + accounting</text>
+
+  <rect x="450" y="120" width="300" height="100" rx="12" fill="#dcfce7" stroke="#4ade80"/>
+  <text x="492" y="160" font-family="Segoe UI, Arial" font-size="18" fill="#14532d">QuickBooksProject App</text>
+  <text x="475" y="188" font-family="Segoe UI, Arial" font-size="14" fill="#14532d">GUI + scheduler + sync engine + SQLite</text>
+
+  <rect x="830" y="120" width="300" height="100" rx="12" fill="#ffedd5" stroke="#fb923c"/>
+  <text x="870" y="160" font-family="Segoe UI, Arial" font-size="18" fill="#9a3412">WooCommerce Store(s)</text>
+  <text x="877" y="188" font-family="Segoe UI, Arial" font-size="14" fill="#9a3412">Orders + product stock by SKU</text>
+
+  <line x1="370" y1="170" x2="450" y2="170" stroke="#2563eb" stroke-width="4"/>
+  <polygon points="450,170 438,162 438,178" fill="#2563eb"/>
+  <text x="382" y="150" font-family="Segoe UI, Arial" font-size="12" fill="#1e40af">Inventory read</text>
+
+  <line x1="750" y1="170" x2="830" y2="170" stroke="#16a34a" stroke-width="4"/>
+  <polygon points="830,170 818,162 818,178" fill="#16a34a"/>
+  <text x="758" y="150" font-family="Segoe UI, Arial" font-size="12" fill="#166534">Stock push</text>
+
+  <line x1="830" y1="300" x2="750" y2="300" stroke="#ea580c" stroke-width="4"/>
+  <polygon points="750,300 762,292 762,308" fill="#ea580c"/>
+  <text x="768" y="280" font-family="Segoe UI, Arial" font-size="12" fill="#9a3412">Paid orders pull</text>
+
+  <line x1="450" y1="300" x2="370" y2="300" stroke="#7c3aed" stroke-width="4"/>
+  <polygon points="370,300 382,292 382,308" fill="#7c3aed"/>
+  <text x="378" y="280" font-family="Segoe UI, Arial" font-size="12" fill="#5b21b6">SalesReceipt add + tax/currency</text>
+
+  <rect x="420" y="250" width="360" height="120" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="445" y="280" font-family="Segoe UI, Arial" font-size="14" fill="#334155">• GST/HST/PST by location</text>
+  <text x="445" y="305" font-family="Segoe UI, Arial" font-size="14" fill="#334155">• USD/CAD to separate deposit accounts</text>
+  <text x="445" y="330" font-family="Segoe UI, Arial" font-size="14" fill="#334155">• Idempotent order posting (processed_orders)</text>
+  <text x="445" y="355" font-family="Segoe UI, Arial" font-size="14" fill="#334155">• Multi-store capable</text>
+</svg>
