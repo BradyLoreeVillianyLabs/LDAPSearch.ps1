@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+  <rect width="1200" height="700" fill="#f4f6fb"/>
+  <rect x="40" y="30" width="1120" height="640" rx="12" fill="white" stroke="#cfd7e6"/>
+  <rect x="60" y="60" width="1080" height="46" rx="8" fill="#1f2937"/>
+  <text x="80" y="89" font-family="Segoe UI, Arial" font-size="20" fill="white">QuickBooksProject</text>
+
+  <rect x="80" y="130" width="1040" height="120" rx="8" fill="#eef4ff" stroke="#b9cdfa"/>
+  <text x="100" y="160" font-family="Segoe UI, Arial" font-size="18" fill="#1d4ed8">Sync Settings</text>
+  <text x="100" y="190" font-family="Segoe UI, Arial" font-size="15" fill="#334155">☑ Dry run (no writes to WooCommerce or QuickBooks)</text>
+  <text x="100" y="220" font-family="Segoe UI, Arial" font-size="15" fill="#334155">Scheduler interval (minutes): 10</text>
+
+  <rect x="80" y="280" width="190" height="44" rx="7" fill="#2563eb"/>
+  <text x="95" y="308" font-family="Segoe UI, Arial" font-size="14" fill="white">Test Connections</text>
+
+  <rect x="285" y="280" width="220" height="44" rx="7" fill="#0ea5e9"/>
+  <text x="300" y="308" font-family="Segoe UI, Arial" font-size="14" fill="white">Run Inventory Full Sync</text>
+
+  <rect x="520" y="280" width="225" height="44" rx="7" fill="#0284c7"/>
+  <text x="536" y="308" font-family="Segoe UI, Arial" font-size="14" fill="white">Run Inventory Delta Sync</text>
+
+  <rect x="760" y="280" width="245" height="44" rx="7" fill="#16a34a"/>
+  <text x="777" y="308" font-family="Segoe UI, Arial" font-size="14" fill="white">Import Woo Sales → QuickBooks</text>
+
+  <rect x="1020" y="280" width="100" height="44" rx="7" fill="#64748b"/>
+  <text x="1037" y="308" font-family="Segoe UI, Arial" font-size="14" fill="white">Pause</text>
+
+  <rect x="80" y="340" width="1040" height="36" rx="7" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="100" y="363" font-family="Segoe UI, Arial" font-size="14" fill="#0f172a">Status: QuickBooks OK | Woo: main-store OK</text>
+
+  <rect x="80" y="390" width="1040" height="250" rx="8" fill="#0f172a"/>
+  <text x="100" y="420" font-family="Consolas, monospace" font-size="14" fill="#93c5fd">2026-04-17 03:54:10 | INFO | Dry-run mode set to True</text>
+  <text x="100" y="448" font-family="Consolas, monospace" font-size="14" fill="#86efac">2026-04-17 03:54:40 | INFO | Inventory delta sync complete</text>
+  <text x="100" y="476" font-family="Consolas, monospace" font-size="14" fill="#fde68a">2026-04-17 03:55:12 | INFO | Woo sales import complete</text>
+</svg>
